@@ -83,9 +83,11 @@ fn install_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .default_window_icon()
         .ok_or_else(|| std::io::Error::other("OpenQuota application icon is unavailable"))?
         .clone();
-    let tray = TrayIconBuilder::with_id("openquota-tray")
-        .icon(icon)
-        .menu(&menu);
+    let tray = TrayIconBuilder::with_id("openquota-tray").icon(icon);
+    // macOS 27 opens a status item's attached menu on every click, ignoring
+    // show_menu_on_left_click(false), so the menu is attached only while a right click shows it.
+    #[cfg(not(target_os = "macos"))]
+    let tray = tray.menu(&menu);
     #[cfg(not(target_os = "linux"))]
     let tray = tray.tooltip("OpenQuota").show_menu_on_left_click(false);
     let tray = tray.on_menu_event(|app, event| match event.id.as_ref() {
@@ -106,8 +108,23 @@ fn install_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         _ => {}
     });
     #[cfg(not(target_os = "linux"))]
-    let tray = tray.on_tray_icon_event(|tray, event| {
+    let tray = tray.on_tray_icon_event(move |tray, event| {
         tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
+
+        #[cfg(target_os = "macos")]
+        if matches!(
+            event,
+            TrayIconEvent::Click {
+                button: MouseButton::Right,
+                button_state: MouseButtonState::Up,
+                ..
+            }
+        ) {
+            // These run in order on the main thread; show_menu blocks until the menu closes.
+            let _ = tray.set_menu(Some(menu.clone()));
+            let _ = tray.with_inner_tray_icon(|inner| inner.show_menu());
+            let _ = tray.set_menu(None::<Menu<tauri::Wry>>);
+        }
 
         if matches!(
             event,
