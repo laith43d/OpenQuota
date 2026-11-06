@@ -186,7 +186,7 @@ fn reset_date(value: &Value) -> Option<DateTime<Utc>> {
     DateTime::from_timestamp_millis((seconds * 1000.0) as i64)
 }
 
-fn format_plan(subscription: Option<&str>, tier: Option<&str>) -> Option<String> {
+pub(super) fn format_plan(subscription: Option<&str>, tier: Option<&str>) -> Option<String> {
     let subscription = subscription?.trim();
     if subscription.is_empty() {
         return None;
@@ -209,6 +209,10 @@ fn format_plan(subscription: Option<&str>, tier: Option<&str>) -> Option<String>
     }) {
         plan.push(' ');
         plan.push_str(multiplier);
+    }
+    // Anthropic renamed the Max 20x plan to Ultra; the credentials still report max + 20x.
+    if plan == "Max 20x" {
+        plan = "Ultra".to_owned();
     }
     Some(plan)
 }
@@ -236,6 +240,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(mapped.plan.as_deref(), Some("Pro 5x"));
+        assert_eq!(
+            super::format_plan(Some("max"), Some("default_claude_max_20x")).as_deref(),
+            Some("Ultra")
+        );
+        assert_eq!(
+            super::format_plan(Some("max"), Some("default_claude_max_5x")).as_deref(),
+            Some("Max 5x")
+        );
         assert_eq!(mapped.quotas.len(), 5);
         assert_eq!(mapped.quotas[4].used_percent, 25.0);
         assert_eq!(mapped.quotas[4].used_value, Some(12.5));
