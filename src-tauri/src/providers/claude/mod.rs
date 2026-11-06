@@ -671,13 +671,10 @@ fn refresh_credential(
 }
 
 fn plan_name(credential: &ClaudeCredential) -> Option<String> {
-    credential.oauth.subscription_type.as_ref().map(|value| {
-        let mut chars = value.chars();
-        chars
-            .next()
-            .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
-            .unwrap_or_default()
-    })
+    mapper::format_plan(
+        credential.oauth.subscription_type.as_deref(),
+        credential.oauth.rate_limit_tier.as_deref(),
+    )
 }
 
 impl crate::providers::UsageProvider for ClaudeProvider {
